@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Stormsend 语种Tab浮动切换
 // @namespace    https://stormsend.djiits.com/
-// @version      1.0
+// @version      1.1
 // @description  将配置后台的语种切换Tab固定浮动在屏幕右侧，随时可点击切换语种
 // @match        https://stormsend.djiits.com/*
 // @grant        GM_addStyle
@@ -19,48 +19,41 @@
       top: 50%;
       transform: translateY(-50%);
       z-index: 999999;
-      background: rgba(255, 255, 255, 0.75);
-      backdrop-filter: blur(6px);
+      background: #fff;
       border-radius: 8px 0 0 8px;
-      box-shadow: -2px 0 12px rgba(0, 0, 0, 0.15);
-      padding: 6px 0;
-      opacity: 0.45;
-      transition: opacity 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: -2px 2px 12px rgba(0, 0, 0, 0.2);
+      padding: 4px 0;
       user-select: none;
       max-height: 80vh;
       overflow-y: auto;
-    }
-
-    #ss-float-lang-panel:hover {
-      opacity: 1;
-      box-shadow: -3px 0 18px rgba(0, 0, 0, 0.25);
+      border-left: 3px solid #1890ff;
     }
 
     #ss-float-lang-panel .ss-lang-btn {
       display: block;
       width: 100%;
-      padding: 5px 14px 5px 10px;
+      padding: 6px 16px 6px 12px;
       border: none;
-      background: transparent;
-      color: #555;
-      font-size: 12px;
+      background: #fff;
+      color: #333;
+      font-size: 13px;
       text-align: center;
       cursor: pointer;
       white-space: nowrap;
       transition: background 0.15s, color 0.15s;
-      line-height: 1.4;
+      line-height: 1.5;
+      font-weight: 500;
     }
 
     #ss-float-lang-panel .ss-lang-btn:hover {
-      background: rgba(66, 139, 202, 0.12);
-      color: #337ab7;
+      background: #e6f7ff;
+      color: #1890ff;
     }
 
     #ss-float-lang-panel .ss-lang-btn.ss-active {
-      background: #428bca;
+      background: #1890ff;
       color: #fff;
       font-weight: bold;
-      border-radius: 4px 0 0 4px;
     }
 
     /* 自定义滚动条 */
@@ -80,44 +73,65 @@
 
   /**
    * 找到页面中的原始语种Tab列表
-   * 选择器: ul.form-lang-group > li.form-lang[data-locale]
    */
   function findOriginalTabs() {
     return document.querySelectorAll('ul.form-lang-group > li.form-lang[data-locale]');
   }
 
   /**
-   * 检测当前哪个语种是选中状态
-   * 策略：检查 li 的 class 中是否有 active/selected/current，
-   * 或者检查计算样式（背景色是否为蓝色）
+   * 切换语种 — 复刻原始 Tab 的 jQuery 事件逻辑：
+   *   t = $(e.target);
+   *   n = t.parents("form");
+   *   n.removeClass(n.data("locale")).addClass(t.data("locale")).data("locale", t.data("locale"))
+   *
+   * 由于页面可能有多个 form（多个编辑区块），需要对所有相关 form 执行切换。
    */
-  function detectActiveLocale(tabs) {
-    for (const tab of tabs) {
-      // 策略1：检查class
-      if (tab.classList.contains('active') ||
-          tab.classList.contains('selected') ||
-          tab.classList.contains('current')) {
-        return tab.dataset.locale;
-      }
+  function switchLocale(newLocale) {
+    // 找到所有包含 form-lang-group 的 form
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+      // 只处理包含 locale 数据的 form
+      const currentLocale = form.getAttribute('data-locale') ||
+                            (typeof jQuery !== 'undefined' ? jQuery(form).data('locale') : null);
+      if (!currentLocale) return;
 
-      // 策略2：检查计算样式（蓝色背景 = 选中）
-      const bg = window.getComputedStyle(tab).backgroundColor;
-      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
-        // 有非透明背景色，可能是选中态
-        const match = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-        if (match) {
-          const r = parseInt(match[1]);
-          const g = parseInt(match[2]);
-          const b = parseInt(match[3]);
-          // 蓝色系判断 (b > r && b > g)
-          if (b > r && b > g && b > 150) {
-            return tab.dataset.locale;
-          }
-        }
+      // 移除旧 locale class，添加新 locale class
+      form.classList.remove(currentLocale);
+      form.classList.add(newLocale);
+
+      // 更新 data-locale（同时更新 DOM attribute 和 jQuery data）
+      form.setAttribute('data-locale', newLocale);
+      if (typeof jQuery !== 'undefined') {
+        jQuery(form).data('locale', newLocale);
       }
+    });
+
+    // 同时更新原始 Tab 的选中态样式（触发原始 li 的 click 来同步原生 UI）
+    const originalTab = document.querySelector(
+      `ul.form-lang-group > li.form-lang[data-locale="${newLocale}"]`
+    );
+    if (originalTab) {
+      originalTab.click();
     }
-    // 默认返回第一个
-    return tabs[0]?.dataset.locale || 'en';
+  }
+
+  /**
+   * 检测当前选中的语种
+   * 从 form 的 data-locale / class 中读取
+   */
+  function detectActiveLocale() {
+    const forms = document.querySelectorAll('form');
+    for (const form of forms) {
+      // 优先从 jQuery data 读取
+      if (typeof jQuery !== 'undefined') {
+        const jqLocale = jQuery(form).data('locale');
+        if (jqLocale) return jqLocale;
+      }
+      // 其次从 attribute 读取
+      const attrLocale = form.getAttribute('data-locale');
+      if (attrLocale) return attrLocale;
+    }
+    return 'en';
   }
 
   /**
@@ -131,7 +145,7 @@
     floatPanel = document.createElement('div');
     floatPanel.id = 'ss-float-lang-panel';
 
-    const activeLocale = detectActiveLocale(tabs);
+    const activeLocale = detectActiveLocale();
 
     tabs.forEach(tab => {
       const locale = tab.dataset.locale;
@@ -147,13 +161,8 @@
       }
 
       btn.addEventListener('click', () => {
-        // 1. 点击原始Tab
-        const originalTab = document.querySelector(
-          `ul.form-lang-group > li.form-lang[data-locale="${locale}"]`
-        );
-        if (originalTab) {
-          originalTab.click();
-        }
+        // 1. 执行语种切换（复刻原始逻辑）
+        switchLocale(locale);
 
         // 2. 更新浮动面板高亮
         floatPanel.querySelectorAll('.ss-lang-btn').forEach(b => {
@@ -169,13 +178,12 @@
   }
 
   /**
-   * 同步浮动面板的高亮状态（监听原始Tab变化）
+   * 同步浮动面板的高亮状态
    */
   function syncActiveState() {
     if (!floatPanel) return;
 
-    const tabs = findOriginalTabs();
-    const activeLocale = detectActiveLocale(tabs);
+    const activeLocale = detectActiveLocale();
 
     floatPanel.querySelectorAll('.ss-lang-btn').forEach(btn => {
       if (btn.dataset.locale === activeLocale) {
@@ -187,9 +195,9 @@
   }
 
   /**
-   * 监听原始Tab区域的DOM变化，同步高亮
+   * 监听原始Tab和form的变化，同步高亮
    */
-  function observeOriginalTabs() {
+  function observeChanges() {
     const tabContainer = document.querySelector('ul.form-lang-group');
     if (!tabContainer || observer) return;
 
@@ -197,13 +205,25 @@
       syncActiveState();
     });
 
+    // 监听 Tab 容器的 class 变化
     observer.observe(tabContainer, {
       attributes: true,
       attributeFilter: ['class', 'style'],
       subtree: true
     });
 
-    // 同时给每个原始tab加点击监听，确保同步
+    // 监听所有 form 的 class 变化（语种切换会改 form 的 class）
+    document.querySelectorAll('form').forEach(form => {
+      if (form.getAttribute('data-locale') ||
+          (typeof jQuery !== 'undefined' && jQuery(form).data('locale'))) {
+        observer.observe(form, {
+          attributes: true,
+          attributeFilter: ['class']
+        });
+      }
+    });
+
+    // 给原始 Tab 加点击监听，确保浮动面板跟着同步
     tabContainer.querySelectorAll('li.form-lang').forEach(li => {
       li.addEventListener('click', () => {
         setTimeout(syncActiveState, 50);
@@ -219,7 +239,7 @@
 
     if (tabs.length > 0) {
       createFloatPanel(tabs);
-      observeOriginalTabs();
+      observeChanges();
       return;
     }
 
@@ -229,7 +249,7 @@
       if (tabs.length > 0) {
         bodyObserver.disconnect();
         createFloatPanel(tabs);
-        observeOriginalTabs();
+        observeChanges();
       }
     });
 
