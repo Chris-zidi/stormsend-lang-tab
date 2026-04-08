@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Stormsend 语种 Tab 右侧固定
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  将 Stormsend 后台的语种切换 Tab 固定在屏幕右侧，始终可见，超出屏幕高度时内部可滚动
 // @author       You
 // @match        https://stormsend.djiits.com/*
@@ -62,10 +62,11 @@
         document.head.appendChild(style);
     };
 
-    // 2. 初始化：只需要加 class 即可，CSS 搞定一切
+    // 2. 初始化：移动到 document.body 防止滚动逃逸
     const initFixed = (element) => {
         if (hasInitialized || element.classList.contains('stormsend-fixed-tab')) return;
-        console.log('[Stormsend Tab] 找到目标元素，固定到右侧');
+        console.log('[Stormsend Tab] 找到目标元素，移动到 document.body 并固定到右侧');
+        document.body.appendChild(element);
         element.classList.add('stormsend-fixed-tab');
         hasInitialized = true;
     };
