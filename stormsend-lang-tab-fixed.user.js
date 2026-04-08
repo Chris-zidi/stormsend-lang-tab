@@ -1,22 +1,17 @@
 // ==UserScript==
-// @name         Stormsend 语种 Tab 右侧悬浮
+// @name         Stormsend 语种 Tab 右侧固定
 // @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  将 Stormsend 后台的语种切换 Tab 固定在页面右侧，可上下拖动调整位置
+// @version      1.3
+// @description  将 Stormsend 后台的语种切换 Tab 固定在屏幕右侧，始终可见，超出屏幕高度时内部可滚动
 // @author       You
 // @match        https://stormsend.djiits.com/*
-// @grant        GM_setValue
-// @grant        GM_getValue
 // @run-at       document-end
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    const STORAGE_KEY = 'stormsendLangTabTopPos';
     const SELECTOR = '.form-lang-group';
-    let isDragging = false;
-    let offsetY;
     let hasInitialized = false;
 
     // 1. 注入 CSS
@@ -25,127 +20,57 @@
         const style = document.createElement('style');
         style.id = 'stormsend-tab-style';
         style.textContent = `
-            /* 固定在屏幕右侧边缘 */
+            /* 固定在屏幕右侧，垂直居中 */
             ul.form-lang-group.stormsend-fixed-tab {
                 position: fixed !important;
                 right: 0 !important;
                 left: auto !important;
+                top: 50% !important;
+                transform: translateY(-50%) !important;
                 z-index: 2147483647 !important;
                 margin: 0 !important;
-                box-shadow: -4px 4px 16px rgba(0,0,0,0.2) !important;
+                box-shadow: -4px 0 16px rgba(0,0,0,0.15) !important;
                 background-color: #ffffff !important;
-                /* 只有左侧有圆角，右侧贴边 */
+                /* 左侧圆角，右侧贴边无圆角 */
                 border-radius: 8px 0 0 8px !important;
                 border: 1px solid #e2e8f0 !important;
                 border-right: none !important;
-                transform: none !important;
                 transition: box-shadow 0.2s ease;
-                overflow: hidden !important;
-                padding-top: 0 !important;
-                /* flex 列布局，支持把手 order */
-                display: flex !important;
-                flex-direction: column !important;
+                padding: 4px 0 !important;
+                /* 超出屏幕高度时内部可滚动 */
+                max-height: 80vh !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
             }
 
             ul.form-lang-group.stormsend-fixed-tab:hover {
-                box-shadow: -6px 6px 20px rgba(0,0,0,0.28) !important;
+                box-shadow: -6px 0 20px rgba(0,0,0,0.22) !important;
             }
 
-            /* 上下拖动把手 */
-            .stormsend-drag-handle {
-                width: 100%;
-                height: 22px;
-                background-color: #f1f5f9;
-                cursor: ns-resize; /* 上下双向箭头，暗示只能上下拖 */
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                user-select: none;
-                border-bottom: 1px solid #cbd5e1;
-                order: -1;
-                flex-shrink: 0;
+            /* 美化内部滚动条 */
+            ul.form-lang-group.stormsend-fixed-tab::-webkit-scrollbar {
+                width: 4px;
             }
-
-            .stormsend-drag-handle:hover {
-                background-color: #e8edf2;
+            ul.form-lang-group.stormsend-fixed-tab::-webkit-scrollbar-track {
+                background: transparent;
             }
-
-            .stormsend-drag-handle:active {
-                cursor: ns-resize;
-                background-color: #dde3ea;
-            }
-
-            /* 把手图标：上下箭头 */
-            .stormsend-drag-handle::after {
-                content: "⠿";
-                color: #94a3b8;
-                font-size: 14px;
-                line-height: 1;
-                letter-spacing: 2px;
+            ul.form-lang-group.stormsend-fixed-tab::-webkit-scrollbar-thumb {
+                background-color: #cbd5e1;
+                border-radius: 4px;
             }
         `;
         document.head.appendChild(style);
     };
 
-    // 2. 初始化逻辑
+    // 2. 初始化：只需要加 class 即可，CSS 搞定一切
     const initFixed = (element) => {
         if (hasInitialized || element.classList.contains('stormsend-fixed-tab')) return;
-
-        console.log('[Stormsend Tab] 找到目标元素，初始化右侧固定...');
-
-        // 插入把手
-        const handle = document.createElement('div');
-        handle.className = 'stormsend-drag-handle';
-        handle.title = '上下拖动调整位置';
-        element.insertBefore(handle, element.firstChild);
-
+        console.log('[Stormsend Tab] 找到目标元素，固定到右侧');
         element.classList.add('stormsend-fixed-tab');
         hasInitialized = true;
-
-        // 读取保存的垂直位置，默认垂直居中
-        const savedTop = GM_getValue(STORAGE_KEY, null);
-        if (savedTop !== null) {
-            element.style.top = savedTop + 'px';
-        } else {
-            // 默认垂直居中
-            const defaultTop = Math.max(0, Math.round((window.innerHeight - element.offsetHeight) / 2));
-            element.style.top = defaultTop + 'px';
-        }
-
-        // 仅上下拖拽事件
-        handle.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            const rect = element.getBoundingClientRect();
-            offsetY = e.clientY - rect.top;
-            e.preventDefault();
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-
-            let newTop = e.clientY - offsetY;
-
-            // 限制在屏幕上下范围内
-            const maxTop = window.innerHeight - element.offsetHeight;
-            newTop = Math.max(0, Math.min(newTop, maxTop));
-
-            element.style.top = newTop + 'px';
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (isDragging) {
-                isDragging = false;
-                // 保存垂直位置
-                const top = parseInt(element.style.top, 10);
-                if (!isNaN(top)) {
-                    GM_setValue(STORAGE_KEY, top);
-                    console.log('[Stormsend Tab] 垂直位置已保存:', top);
-                }
-            }
-        });
     };
 
-    // 3. 元素检测（三重策略）
+    // 3. 元素检测
     addStyles();
 
     const checkForElement = () => {
@@ -160,10 +85,9 @@
     if (!checkForElement()) {
         const observer = new MutationObserver(() => {
             if (checkForElement()) {
-                // 找到后不 disconnect，以防 SPA 路由跳转后重新渲染
+                // 不 disconnect，防 SPA 路由重渲染
             }
         });
-
         observer.observe(document.body, { childList: true, subtree: true });
 
         let attempts = 0;
