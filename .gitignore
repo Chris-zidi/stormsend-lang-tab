@@ -1,0 +1,30 @@
+# 依赖
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 机密文件
+.env
+.env.*
+*.pem
+*.key
+credentials.*
+secrets.*
+token.json
+passwords.*
+
+# 浏览器 profile（含密码和 cookie）
+chrome_profile/
+chrome_profile_*/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
